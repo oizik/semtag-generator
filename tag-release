@@ -1,6 +1,6 @@
 #!/bin/bash
 ARGUMENTS="$@"
-BRANCH="main"
+BRANCH="master"
 DRYRUN="0"
 GITPARAMS=()
 RELEASEDATE=$(date '+%Y%m%d')
@@ -10,6 +10,7 @@ PREVIOUS_COMMIT=""
 RUNSILENT="0"
 VERBOSE="0"
 VERSIONTYPE="patch"
+AUTOPUSH="0"
 
 
 # Function to return help text when requested with -h option.
@@ -19,7 +20,7 @@ help() {
     echo "Generates, increments and pushes an annotated semantic version tag for current git repository."
     echo
     echo "Usage:"
-    echo "  sh tag-release [-b|--branch] [-d|--date] [-h|--help] [-m|--message] [-p|--previous] [-r|--remote] [-v|--version-type]"
+    echo "  sh tag-release [-b|--branch] [-d|--date] [-h|--help] [-m|--message] [-p|--previous] [-r|--remote] [-s|--send] [-v|--version-type]"
     echo
     echo "Options:"
     echo "-b,--branch <branch>"
@@ -53,6 +54,10 @@ help() {
     echo "-r,--remote <remote>"
     echo "      Name of remote to use for pushing."
     echo "      If ommited, defaults to '$REMOTE'"
+    echo
+    echo "-s,--send"
+    echo "      Send (push) all version changes to remote automatically"
+    echo "      If ommited, after versions are updated you will need to push manually"
     echo
     echo "-t,--version-type [major|minor|patch]"
     echo "      Type of semantic version to create. Valid options are 'major', 'minor' or 'patch'"
@@ -103,6 +108,9 @@ do
       -q|--quiet)
         RUNQUIET="1"
         GITPARAMS+=(--dry-run)
+        ;;
+      -s|--send)
+        AUTOPUSH="1"
         ;;
       -v|--verbose)
         # See if a second argument is passed, due to argument reassignment to -v.
@@ -156,7 +164,7 @@ PREVIOUS_RELEASE=$(echo $PREVIOUS_TAG | cut -d'/' -f 3 | cut -d'v' -f2 )
 
 conditional_echo "- Creating release tag"
 # Get last commit
-LASTCOMMIT=$(echo $(git rev-parse $REMOTE/$BRANCH))
+LASTCOMMIT=$(echo $(git rev-parse $BRANCH))
 # Check if commit already has a tag
 NEEDSTAG=$(echo $(git describe --contains $LASTCOMMIT 2>/dev/null))
 
@@ -194,13 +202,37 @@ if [ -z "$NEEDSTAG" ]; then
             # Generate a list of commit messages since the last release.
             RELEASENOTES=$(git log --pretty=format:"- %s" $PREVIOUS_COMMIT...$LASTCOMMIT  --no-merges)
         fi
-        # Tag the commit.
+        # Version Poetry
+        # Check that Git Version equals Poetry Version
+        # Generate the change log
+        # Run pre-commit run --all-files (fixes blank lines at the end of change log)
+        # Commit both change log and pyproject.toml
+        # Tag the newly created commit
+        # Push to origin
         if [[ "$DRYRUN" -eq 0 ]]; then
-            conditional_echo "-- Tagging commit. ($LASTCOMMIT)"
+            conditional_echo "-- Updating poetry version."
+            poetry version $VERSIONTYPE
+            poetry_version=$(poetry version -s)
+            if [ "$poetry_version" != "$VNUM1.$VNUM2.$VNUM3" ]; then
+              conditional_echo "-- ERROR: Poetry version $poetry_version does not equal new Git version $VNUM1.$VNUM2.$VNUM3"
+              exit 1
+            fi
+            conditional_echo "- Generating change log."
+            #TODO: remove hard coded paths and styles
+            git-changelog .git -s angular -o CHANGELOG.md -t path:docs/changelog-template-keepachangelog/
+            pre-commit run --all-files
+            git commit pyproject.toml CHANGELOG.md -m"docs: bump version and update change log"
+            LASTCOMMIT=$(echo $(git rev-parse $BRANCH))
+
+            conditional_echo "- Tagging commit. ($LASTCOMMIT)"
             git tag -a $NEWTAG -m"$RELEASEDATE: Release $VNUM1.$VNUM2.$VNUM3" -m"$RELEASENOTES" $LASTCOMMIT
             conditional_echo "- Pushing release to $REMOTE"
             # Push up the tag
-            git push $REMOTE $NEWTAG "${GITPARAMS[@]}"
+            if [[ "$AUTOPUSH" -eq 1 ]]; then
+              git push --atomic $REMOTE $BRANCH $NEWTAG "${GITPARAMS[@]}"
+            else
+              conditional_echo "- DON'T FORGET to push changes to remote"
+            fi
         else
             conditional_echo "Release Notes:"
             conditional_echo "$RELEASENOTES"
