@@ -221,7 +221,7 @@ if [ -z "$NEEDSTAG" ]; then
             #TODO: remove hard coded paths and styles
             git-changelog .git -s angular -o CHANGELOG.md -t path:docs/changelog-template-keepachangelog/
             pre-commit run --all-files
-            git commit pyproject.toml CHANGELOG.md -m"docs: bump version and update change log"
+            git commit pyproject.toml CHANGELOG.md -m"docs: bump version to $poetry_version and update change log"
             LASTCOMMIT=$(echo $(git rev-parse $BRANCH))
 
             conditional_echo "- Tagging commit. ($LASTCOMMIT)"
@@ -232,6 +232,7 @@ if [ -z "$NEEDSTAG" ]; then
               git push --atomic $REMOTE $BRANCH $NEWTAG "${GITPARAMS[@]}"
             else
               conditional_echo "- DON'T FORGET to push changes to remote"
+              conditional_echo "git push --atomic origin master v$poetry_version"
             fi
         else
             conditional_echo "Release Notes:"
