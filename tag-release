@@ -1,4 +1,7 @@
 #!/bin/bash
+
+#set -e
+
 ARGUMENTS="$@"
 BRANCH="master"
 DRYRUN="0"
@@ -11,6 +14,7 @@ RUNSILENT="0"
 VERBOSE="0"
 VERSIONTYPE="patch"
 AUTOPUSH="0"
+
 
 
 # Function to return help text when requested with -h option.
@@ -143,9 +147,9 @@ fi
 
 conditional_echo "- Updating local $BRANCH branch."
 # pull latest version of production branch
-git pull $REMOTE $BRANCH "${GITPARAMS[@]}"
+# git pull $REMOTE $BRANCH "${GITPARAMS[@]}"
 # fetch remote, to get latest tags
-git fetch $REMOTE "${GITPARAMS[@]}"
+# git fetch $REMOTE "${GITPARAMS[@]}"
 
 # Get previous release tags
 conditional_echo "- Getting previous tag."
@@ -231,8 +235,8 @@ if [ -z "$NEEDSTAG" ]; then
             if [[ "$AUTOPUSH" -eq 1 ]]; then
               git push --atomic $REMOTE $BRANCH $NEWTAG "${GITPARAMS[@]}"
             else
-              conditional_echo "- DON'T FORGET to push changes to remote"
-              conditional_echo "git push --atomic origin master v$poetry_version"
+              conditional_echo "- DON'T FORGET to push changes to remote & update release pages"
+              conditional_echo "git push --atomic origin $BRANCH v$poetry_version"
             fi
         else
             conditional_echo "Release Notes:"
